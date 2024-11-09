@@ -4,6 +4,7 @@ import numpy as np
 import math
 import statistics as sts
 import requests
+import scipy.stats as scs
 
 # Define Font and Color Constants
 LARGE_FONT_STYLE = ("Arial", 40, "bold")
@@ -274,57 +275,63 @@ class UnitConverter:
             messagebox.showerror("Error", "Invalid input")
 
 # Statistics functionality
+def is_number(value):
+    try:
+        float(value)
+        return True
+    except:
+        return False
+
 class Statistics:
     def __init__(self, notebook):
         self.window = tk.Frame(notebook)
         notebook.add(self.window, text='Statistics')
 
-        # Radio buttons to choose 1-variable or 2-variables
-        self.mode = tk.StringVar(value="1-Variable")
-        self.radio_1_variable = ttk.Radiobutton(
-            self.window, text="1-Variable", variable=self.mode, value="1-Variable", command=self.show_option)
-        self.radio_1_variable.pack(anchor='w', padx=10, pady=5)
+        # 1-Variable and 2-Variable Modes
+        self.one_var_mode = OneVariableStatistics(self.window)
+        self.two_var_mode = TwoVariableStatistics(self.window)
 
-        self.radio_2_variables = ttk.Radiobutton(
-            self.window, text="2-Variables", variable=self.mode, value="2-Variables", command=self.show_option)
-        self.radio_2_variables.pack(anchor='w', padx=10, pady=5)
+        # Buttons for switching between modes
+        self.button_frame = tk.Frame(self.window)
+        self.button_frame.pack(pady=10)
 
-        # Frame to display content
-        self.content_frame = tk.Frame(self.window)
-        self.content_frame.pack(expand=True, fill='both')
+        one_var_button = ttk.Button(self.button_frame, text="1-Variable", command=self.show_one_var_mode)
+        one_var_button.pack(side="left", padx=10)
 
-        # Instances of the 1-variable and 2-variable classes
-        self.one_var_stat = OneVariableStatistics(self.content_frame)
-        self.two_var_stat = TwoVariableStatistics(self.content_frame)
+        two_var_button = ttk.Button(self.button_frame, text="2-Variables", command=self.show_two_var_mode)
+        two_var_button.pack(side="left", padx=10)
 
-        self.show_option()  # Display the default option
+        # Show 1-variable mode by default
+        self.show_one_var_mode()
+    
+    def show_one_var_mode(self):
+        self.two_var_mode.hide()
+        self.one_var_mode.show()
 
-    def show_option(self):
-        # Clear the content frame before showing the new option
-        for widget in self.content_frame.winfo_children():
-            widget.destroy()
+    def show_two_var_mode(self):
+        self.one_var_mode.hide()
+        self.two_var_mode.show()
 
-        # Show 1-variable or 2-variables functionality based on selection
-        if self.mode.get() == "1-Variable":
-            self.one_var_stat.display()
-        else:
-            self.two_var_stat.display()
+    def run(self):
+        self.window.mainloop()
+
 
 class OneVariableStatistics:
     def __init__(self, parent):
-        self.parent = parent
+        self.frame = tk.Frame(parent)
         self.x_values = []
         self.x_entries = []
         self.x_entry_widgets = []
 
-    def display(self):
-        # Create the table for 1-variable statistics
-        self.table_frame = tk.Frame(self.parent)
+        self.create_widgets() 
+    
+    def create_widgets(self):
+        self.table_frame = tk.Frame(self.frame)
         self.table_frame.pack(pady=10)
 
         tk.Label(self.table_frame, text="", font=DEFAULT_FONT_STYLE, width=5).grid(row=0, column=0)
         tk.Label(self.table_frame, text="x", font=DEFAULT_FONT_STYLE, width=10).grid(row=0, column=1)
-
+        
         self.create_row(1)
         self.create_row(2)
         self.create_row(3)
@@ -336,48 +343,66 @@ class OneVariableStatistics:
 
         x_var = tk.StringVar()
         x_entry = ttk.Entry(self.table_frame, textvariable=x_var, font=DEFAULT_FONT_STYLE, width=10)
+        x_entry.grid(row=index, column=1)
 
         if index > 1:
             x_entry.config(state='disabled')
-
-        self.x_entries.append(x_var)
+        
         self.x_entry_widgets.append(x_entry)
-
-        x_entry.grid(row=index, column=1)
+        self.x_entries.append(x_var)
 
         # Detect when user fills in the current row
         x_var.trace_add("write", lambda *args, row=index: self.check_add_row(row))
 
     def check_add_row(self, row):
-        if self.x_entries[row - 1].get():
+        x_value = self.x_entries[row - 1].get()
+        # Check if x_value is numeric:
+        if is_number(x_value):
             # Enable the next row's entry if it exists
-            if row < len(self.x_entry_widgets):
+            if row < len(self.x_entries):
                 self.x_entry_widgets[row].config(state='normal')
             else:
                 # Create a new row if necessary
                 self.create_row(row + 1)
                 self.x_entry_widgets[row].config(state='normal')
 
+            self.update_values()
+        else:
+            #self.x_entry_widgets[row-1].delete(0,tk.END) # clear invalid input
+            self.x_entry_widgets[row-1].delete(0,tk.END)
+            ###
+            #  add error message
+            ###
+
         # Update x_values with the current inputs
-        self.update_values()
 
     def update_values(self):
-        self.x_values = [x_var.get() for x_var in self.x_entries if x_var.get()]
+        self.x_values = [float(x_var.get()) for x_var in self.x_entries if x_var.get()]
+        
+    def show(self):
+        self.frame.pack(expand=True, fill='both')
+
+    def hide(self):
+        self.frame.pack_forget()
 
 
 class TwoVariableStatistics:
     def __init__(self, parent):
-        self.parent = parent
+        self.frame = tk.Frame(parent)
+
         self.x_values = []
         self.y_values = []
+
         self.x_entries = []
         self.y_entries = []
+
         self.x_entry_widgets = []
         self.y_entry_widgets = []
 
-    def display(self):
-        # Create the table for 2-variable statistics
-        self.table_frame = tk.Frame(self.parent)
+        self.create_widgets()
+    
+    def create_widgets(self):
+        self.table_frame = tk.Frame(self.frame)
         self.table_frame.pack(pady=10)
 
         tk.Label(self.table_frame, text="", font=DEFAULT_FONT_STYLE, width=5).grid(row=0, column=0)
@@ -396,20 +421,21 @@ class TwoVariableStatistics:
         y_var = tk.StringVar()
 
         x_entry = ttk.Entry(self.table_frame, textvariable=x_var, font=DEFAULT_FONT_STYLE, state='disabled', width=10)
+        x_entry.grid(row=index, column=1)
+
         y_entry = ttk.Entry(self.table_frame, textvariable=y_var, font=DEFAULT_FONT_STYLE, state='disabled', width=10)
+        y_entry.grid(row=index, column=2)
 
         # Enable input for the first row initially
         if index == 1:
             x_entry.config(state='normal')
             y_entry.config(state='normal')
 
-        self.x_entries.append(x_var)
-        self.y_entries.append(y_var)
         self.x_entry_widgets.append(x_entry)
         self.y_entry_widgets.append(y_entry)
 
-        x_entry.grid(row=index, column=1)
-        y_entry.grid(row=index, column=2)
+        self.x_entries.append(x_var)
+        self.y_entries.append(y_var)
 
         # Detect when user fills in the current row
         x_var.trace_add("write", lambda *args, row=index: self.check_add_row(row))
@@ -427,12 +453,138 @@ class TwoVariableStatistics:
                 self.x_entry_widgets[row].config(state='normal')
                 self.y_entry_widgets[row].config(state='normal')
 
-        # Update x_values and y_values with the current inputs
-        self.update_values()
+            # Update x_values and y_values with the current inputs
+            self.update_values()
 
     def update_values(self):
-        self.x_values = [x_var.get() for x_var in self.x_entries if x_var.get()]
-        self.y_values = [y_var.get() for y_var in self.y_entries if y_var.get()]
+        self.x_values = []  # Reset the x_values list
+        self.y_values = []  # Reset the y_values list
+    
+        for i in range(len(self.x_entries)):
+            x_value = self.x_entries[i].get()
+            y_value = self.y_entries[i].get()
+            
+            # Only add valid x and y values
+            if is_number(x_value) and is_number(y_value):
+                self.x_values.append(float(x_value))
+                self.y_values.append(float(y_value))
+    
+    def show(self):
+        self.frame.pack(expand=True, fill='both')
+
+    def hide(self):
+        self.frame.pack_forget()
+
+class StatisticsCalc:
+    def __init__(self, x_values, y_values = None):
+        self.inputX = np.array(x_values)
+        self.inputY = np.array(y_values) if y_values is not None else []
+
+    def n(self):
+        return len(self.inputX) 
+
+    def meanX(self):
+        return np.mean(self.inputX)
+    def meanY(self):
+        return np.mean(self.inputY)
+
+    def medianX(self):
+        return np.median(self.inputX)
+    def medianY(self):
+        return np.median(self.inputY)
+    
+    def minX(self):
+        return np.amin(self.inputX)
+    def minY(self):
+        return np.amin(self.inputY)
+    
+    def maxX(self):
+        return np.amax(self.inputX)
+    def maxY(self):
+        return np.amax(self.inputY)
+
+    def modeX(self):
+        return sts.multimode(self.inputX)
+    def modeY(self):
+        return sts.multimode(self.inputY)
+    
+    def sumX(self):
+        return np.sum(self.inputX)
+    def sumY(self):
+        return np.sum(self.inputY)
+
+    def sum_squareX(self):
+        return np.sum(np.square(self.inputX))
+    def sum_squareY(self):
+        return np.sum(np.square(self.inputY))
+    
+    def sum_XY(self):
+        return np.sum(np.multiply(self.inputX, self.inputY))
+    
+    def sum_cubeX(self):
+        return np.sum(np.multiply(np.square(self.inputX)), self.inputX)
+    
+    def sum_X_to_fourth(self):
+        return np.sum(np.square(np.square(self.inputX)))
+    
+
+    def Q1_X(self):
+        return np.percentile(self.inputX, 25)
+    def Q1_Y(self):
+        return np.percentile(self.inputY, 25)
+    
+    def Q3_X(self):
+        return np.percentile(self.inputX, 75)
+    def Q3_Y(self):
+        return np.percentile(self.inputY, 75)
+    
+    def skewnessX(self):
+        return scs.skew(self.inputX, bias = False)
+    def skewnessY(self):
+        return scs.skew(self.inputY, bias = False)
+
+    # variablility
+    def sample_varianceX(self):
+        return sts.variance(self.inputX)
+    def sample_varianceY(self):
+        return sts.variance(self.inputY)
+    
+    def population_varianceX(self):
+        return sts.pvariance(self.inputX)
+    def population_varianceY(self):
+        return sts.pvariance(self.inputY)
+
+    def sample_std_dev_X(self):
+        return sts.stdev(self.inputX)
+    def sample_std_dev_Y(self):
+        return sts.stdev(self.inputY)
+    
+    def population_std_dev_X(self):
+        return sts.pstdev(self.inputX)
+    def population_std_dev_Y(self):
+        return sts.pstdev(self.inputY)
+    
+    #relation between two inputs
+    def covariance(self):
+        return sts.covariance(self.inputX, self.inputY)
+    
+    def correlation(self):
+        return sts.correlation(self.inputX, self.inputY)
+    
+    def linear_reg(self, i = -1): ## corresponding display
+        '''
+            Y = a + bX
+            0 = slope = b
+            1 = intercept = a
+            2 = r value = Pearson correlation coefficient  
+            3 = p value
+            4 = std error  = std error of the estimated slope
+            5 = intercept error 
+        '''
+        if i == -1: # display all 6 values
+            return scs.linregress(self.inputX, self.inputY)
+        else: # display the chosen value only
+            return scs.linregress(self.inputX, self.inputY)[i]
 
 
 if __name__ == "__main__":
